@@ -287,9 +287,10 @@ class Tetris:
                 self._move(1, 0)
 
     def handle_keydown(self, key):
+        if key == pygame.K_r:
+            self._new_game()
+            return
         if self.game_over:
-            if key == pygame.K_r:
-                self._new_game()
             return
         if key == pygame.K_p:
             self.paused = not self.paused
@@ -392,13 +393,14 @@ class Tetris:
                 pygame.draw.rect(self.screen, tinted, (x, y, mini - 2, mini - 2), border_radius=2)
 
         hints = [
-            ("← →",   "Move"),
-            ("↑ / X",  "Rotate CW"),
-            ("Z",      "Rotate CCW"),
-            ("↓",      "Soft drop"),
-            ("Space",  "Hard drop"),
-            ("C",      "Hold"),
-            ("P",      "Pause"),
+            ("Left/Right", "Move"),
+            ("Up / X",     "Rotate CW"),
+            ("Z",          "Rotate CCW"),
+            ("Down",       "Soft drop"),
+            ("Space",      "Hard drop"),
+            ("C",          "Hold"),
+            ("P",          "Pause"),
+            ("R",          "Restart"),
         ]
         y = SCREEN_H - len(hints) * 22 - 10
         label("CONTROLS", y - 24)

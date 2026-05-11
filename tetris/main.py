@@ -191,6 +191,7 @@ class Tetris:
         self.fall_interval = self._fall_speed()
         self.fall_timer = 0
         self.lock_timer = None
+        self.down_held = False
 
     def _refill_bag(self):
         pieces = list(TETROMINOES.keys())
@@ -282,9 +283,12 @@ class Tetris:
         else:
             self.lock_timer = None
             self.fall_timer += dt
-            if self.fall_timer >= self.fall_interval:
-                self.fall_timer -= self.fall_interval
-                self._move(1, 0)
+            # Fall faster when Down key is held
+            effective_interval = self.fall_interval // 10 if self.down_held else self.fall_interval
+            if self.fall_timer >= effective_interval:
+                self.fall_timer -= effective_interval
+                if self._move(1, 0) and self.down_held:
+                    self.score += 1
 
     def handle_keydown(self, key):
         if key == pygame.K_r:
@@ -302,6 +306,7 @@ class Tetris:
         elif key == pygame.K_RIGHT:
             self._move(0, 1)
         elif key == pygame.K_DOWN:
+            self.down_held = True
             if self._move(1, 0):
                 self.score += 1
         elif key == pygame.K_UP or key == pygame.K_x:
@@ -312,6 +317,10 @@ class Tetris:
             self._hard_drop()
         elif key == pygame.K_c:
             self._hold()
+
+    def handle_keyup(self, key):
+        if key == pygame.K_DOWN:
+            self.down_held = False
 
     def draw(self):
         self.screen.fill(BLACK)
@@ -393,10 +402,10 @@ class Tetris:
                 pygame.draw.rect(self.screen, tinted, (x, y, mini - 2, mini - 2), border_radius=2)
 
         hints = [
-            ("Left/Right", "Move"),
+            ("← →", "Move"),
             ("Up / X",     "Rotate CW"),
             ("Z",          "Rotate CCW"),
-            ("Down",       "Soft drop"),
+            ("↓",       "Soft drop"),
             ("Space",      "Hard drop"),
             ("C",          "Hold"),
             ("P",          "Pause"),
@@ -430,6 +439,8 @@ class Tetris:
                     sys.exit()
                 elif event.type == pygame.KEYDOWN:
                     self.handle_keydown(event.key)
+                elif event.type == pygame.KEYUP:
+                    self.handle_keyup(event.key)
             self.update(dt)
             self.draw()
 

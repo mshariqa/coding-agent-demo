@@ -8,7 +8,8 @@ from unittest.mock import Mock, patch, MagicMock
 from main import (
     Board, Piece, Tetris,
     COLS, ROWS, TETROMINOES, COLORS,
-    SCORE_TABLE, LINES_PER_LEVEL, LOCK_DELAY
+    SCORE_TABLE, LINES_PER_LEVEL, LOCK_DELAY,
+    LIGHT_BG, _contrast_ratio
 )
 
 
@@ -572,6 +573,39 @@ class TestTetrisGameLogic:
 
         # No movement should occur
         assert mock_tetris.current.row == 0
+
+    def test_toggle_theme_with_keyboard(self):
+        """Test pressing T toggles light/dark mode."""
+        with patch('main.pygame') as mock_pygame:
+            game = Tetris()
+            game.dark_mode = True
+            game.handle_keydown(mock_pygame.K_t)
+            assert not game.dark_mode
+            game.handle_keydown(mock_pygame.K_t)
+            assert game.dark_mode
+
+    def test_toggle_theme_with_mouse_button(self):
+        """Test clicking theme button toggles mode."""
+        with patch('main.pygame'):
+            game = Tetris()
+            game.dark_mode = True
+            game.theme_button_rect = Mock()
+            game.theme_button_rect.collidepoint.return_value = True
+
+            game.handle_mouse_down((0, 0))
+            assert not game.dark_mode
+
+            game.theme_button_rect.collidepoint.return_value = False
+            game.handle_mouse_down((0, 0))
+            assert not game.dark_mode
+
+    def test_light_mode_block_colors_are_high_contrast(self):
+        """Test block colors are adjusted for readable contrast in light mode."""
+        with patch('main.pygame'):
+            game = Tetris()
+            game.dark_mode = False
+            adjusted = game._high_contrast_color(COLORS["O"])
+            assert _contrast_ratio(adjusted, LIGHT_BG) >= 4.5
 
 
 # ── Integration Tests ──────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ SCREEN_H = ROWS * CELL
 FPS = 60
 LOCK_DELAY = 500          # ms before a landed piece locks
 LINES_PER_LEVEL = 10
+CONTROL_LINE_HEIGHT = 15
 
 # Colours
 BLACK    = (  0,   0,   0)
@@ -101,6 +102,18 @@ KICKS_I = {
 }
 
 SCORE_TABLE = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
+
+CONTROL_HINTS = [
+    ("← →", "Move"),
+    ("Up / X", "Rotate CW"),
+    ("Z", "Rotate CCW"),
+    ("↓", "Soft drop"),
+    ("Space", "Hard drop"),
+    ("C", "Hold"),
+    ("T", "Theme"),
+    ("P", "Pause"),
+    ("R", "Restart"),
+]
 
 
 def _relative_luminance(color):
@@ -198,6 +211,7 @@ class Tetris:
         self.clock = pygame.time.Clock()
         self.font_lg = pygame.font.SysFont("monospace", 28, bold=True)
         self.font_sm = pygame.font.SysFont("monospace", 18)
+        self.font_xs = pygame.font.SysFont("monospace", 14)
         self.dark_mode = True
         self.theme_button_rect = None
         self._new_game()
@@ -441,10 +455,29 @@ class Tetris:
             y = oy + dr * mini + 2
             pygame.draw.rect(self.screen, color, (x, y, mini - 2, mini - 2), border_radius=2)
 
-    def _draw_sidebar(self):
-        theme = self._theme_colors()
+    def _sidebar_layout(self):
         ox = COLS * CELL + 10
         w = SIDEBAR - 20
+        hold_box = (ox, 390, w, 80)
+        controls_label_y = hold_box[1] + hold_box[3] + 8
+        return {
+            "ox": ox,
+            "w": w,
+            "theme_button_box": (ox, 205, w, 30),
+            "next_box": (ox, 265, w, 80),
+            "hold_box": hold_box,
+            "controls_label_y": controls_label_y,
+            "controls_y": controls_label_y + 20,
+            "control_line_height": CONTROL_LINE_HEIGHT,
+            "control_key_right": ox + 58,
+            "control_action_x": ox + 72,
+        }
+
+    def _draw_sidebar(self):
+        theme = self._theme_colors()
+        layout = self._sidebar_layout()
+        ox = layout["ox"]
+        w = layout["w"]
         pygame.draw.rect(self.screen, theme["sidebar_bg"], (COLS * CELL, 0, SIDEBAR, SCREEN_H))
         pygame.draw.line(self.screen, theme["grid"], (COLS * CELL, 0), (COLS * CELL, SCREEN_H), 2)
 
@@ -465,7 +498,7 @@ class Tetris:
         label("LEVEL", 160)
         value(str(self.level), 180)
 
-        self.theme_button_rect = pygame.Rect(ox, 205, w, 30)
+        self.theme_button_rect = pygame.Rect(*layout["theme_button_box"])
         pygame.draw.rect(self.screen, theme["button_bg"], self.theme_button_rect, border_radius=4)
         pygame.draw.rect(self.screen, theme["grid"], self.theme_button_rect, 1, border_radius=4)
         mode_text = "Dark mode" if self.dark_mode else "Light mode"
@@ -473,12 +506,12 @@ class Tetris:
         self.screen.blit(btn_surf, btn_surf.get_rect(center=self.theme_button_rect.center))
 
         label("NEXT", 240)
-        pygame.draw.rect(self.screen, theme["grid"], (ox, 265, w, 80), 1)
+        pygame.draw.rect(self.screen, theme["grid"], layout["next_box"], 1)
         if self.bag:
             self._draw_mini_piece(self.bag[0], ox + 10, 270)
 
         label("HOLD", 365)
-        pygame.draw.rect(self.screen, theme["grid"], (ox, 390, w, 80), 1)
+        pygame.draw.rect(self.screen, theme["grid"], layout["hold_box"], 1)
         if self.held:
             cells = TETROMINOES[self.held][0]
             mini = CELL - 8
@@ -489,25 +522,14 @@ class Tetris:
                 y = 395 + dr * mini + 2
                 pygame.draw.rect(self.screen, tinted, (x, y, mini - 2, mini - 2), border_radius=2)
 
-        hints = [
-            ("← →", "Move"),
-            ("Up / X",     "Rotate CW"),
-            ("Z",          "Rotate CCW"),
-            ("↓",       "Soft drop"),
-            ("Space",      "Hard drop"),
-            ("C",          "Hold"),
-            ("T",          "Theme"),
-            ("P",          "Pause"),
-            ("R",          "Restart"),
-        ]
-        y = SCREEN_H - len(hints) * 22 - 10
-        label("CONTROLS", y - 24)
-        for hkey, action in hints:
-            k_surf = self.font_sm.render(hkey, True, theme["hint"])
-            a_surf = self.font_sm.render(action, True, theme["label"])
-            self.screen.blit(k_surf, (ox, y))
-            self.screen.blit(a_surf, (ox + 72, y))
-            y += 22
+        label("CONTROLS", layout["controls_label_y"])
+        y = layout["controls_y"]
+        for hkey, action in CONTROL_HINTS:
+            k_surf = self.font_xs.render(hkey, True, theme["hint"])
+            a_surf = self.font_xs.render(action, True, theme["label"])
+            self.screen.blit(k_surf, k_surf.get_rect(topright=(layout["control_key_right"], y)))
+            self.screen.blit(a_surf, (layout["control_action_x"], y))
+            y += layout["control_line_height"]
 
     def _draw_overlay(self, title, subtitle):
         theme = self._theme_colors()

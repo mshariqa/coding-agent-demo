@@ -20,6 +20,10 @@ DARK_BG  = ( 18,  18,  30)
 GRID_COL = ( 40,  40,  60)
 WHITE    = (255, 255, 255)
 GRAY     = (128, 128, 128)
+LIGHT_BG = (245, 245, 250)
+LIGHT_GRID_COL = (180, 180, 200)
+DARK_TEXT = (35, 35, 45)
+BLUE_HINT = (60, 110, 200)
 
 COLORS = {
     "I": (  0, 240, 240),
@@ -99,6 +103,24 @@ KICKS_I = {
 SCORE_TABLE = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
 
 
+def _relative_luminance(color):
+    def channel(v):
+        c = v / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = color
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def _contrast_ratio(a, b):
+    la, lb = _relative_luminance(a), _relative_luminance(b)
+    lighter, darker = max(la, lb), min(la, lb)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _blend_color(color, target, amount):
+    return tuple(int(color[i] + (target[i] - color[i]) * amount) for i in range(3))
+
+
 # ── Board ──────────────────────────────────────────────────────────────────────
 class Board:
     def __init__(self):
@@ -124,17 +146,18 @@ class Board:
             self.grid.insert(0, [None] * COLS)
         return len(full)
 
-    def draw(self, surface):
-        surface.fill(DARK_BG, (0, 0, COLS * CELL, ROWS * CELL))
+    def draw(self, surface, bg_color=DARK_BG, grid_color=GRID_COL, color_transform=None):
+        transform = color_transform or (lambda color: color)
+        surface.fill(bg_color, (0, 0, COLS * CELL, ROWS * CELL))
         for r in range(ROWS):
             for c in range(COLS):
                 color = self.grid[r][c]
                 if color:
-                    self._draw_cell(surface, r, c, color)
+                    self._draw_cell(surface, r, c, transform(color))
         for r in range(ROWS + 1):
-            pygame.draw.line(surface, GRID_COL, (0, r * CELL), (COLS * CELL, r * CELL))
+            pygame.draw.line(surface, grid_color, (0, r * CELL), (COLS * CELL, r * CELL))
         for c in range(COLS + 1):
-            pygame.draw.line(surface, GRID_COL, (c * CELL, 0), (c * CELL, ROWS * CELL))
+            pygame.draw.line(surface, grid_color, (c * CELL, 0), (c * CELL, ROWS * CELL))
 
     def _draw_cell(self, surface, r, c, color, ox=0, oy=0):
         x = ox + c * CELL + 1
@@ -175,6 +198,8 @@ class Tetris:
         self.clock = pygame.time.Clock()
         self.font_lg = pygame.font.SysFont("monospace", 28, bold=True)
         self.font_sm = pygame.font.SysFont("monospace", 18)
+        self.dark_mode = True
+        self.theme_button_rect = None
         self._new_game()
 
     def _new_game(self):
@@ -192,6 +217,44 @@ class Tetris:
         self.fall_timer = 0
         self.lock_timer = None
         self.down_held = False
+
+    def _theme_colors(self):
+        if self.dark_mode:
+            return {
+                "board_bg": DARK_BG,
+                "sidebar_bg": DARK_BG,
+                "grid": GRID_COL,
+                "text": WHITE,
+                "label": GRAY,
+                "hint": (100, 200, 255),
+                "button_bg": (35, 35, 55),
+                "button_text": WHITE,
+                "overlay_bg": (0, 0, 0, 160),
+            }
+        return {
+            "board_bg": LIGHT_BG,
+            "sidebar_bg": (235, 235, 245),
+            "grid": LIGHT_GRID_COL,
+            "text": DARK_TEXT,
+            "label": (90, 90, 115),
+            "hint": BLUE_HINT,
+            "button_bg": (210, 215, 235),
+            "button_text": DARK_TEXT,
+            "overlay_bg": (255, 255, 255, 150),
+        }
+
+    def _high_contrast_color(self, color):
+        target_bg = self._theme_colors()["board_bg"]
+        adjusted = color
+        target = BLACK if _relative_luminance(target_bg) > 0.45 else WHITE
+        for _ in range(10):
+            if _contrast_ratio(adjusted, target_bg) >= 4.5:
+                break
+            adjusted = _blend_color(adjusted, target, 0.2)
+        return adjusted
+
+    def _toggle_theme(self):
+        self.dark_mode = not self.dark_mode
 
     def _refill_bag(self):
         pieces = list(TETROMINOES.keys())
@@ -294,6 +357,9 @@ class Tetris:
         if key == pygame.K_r:
             self._new_game()
             return
+        if key == pygame.K_t:
+            self._toggle_theme()
+            return
         if self.game_over:
             return
         if key == pygame.K_p:
@@ -322,9 +388,19 @@ class Tetris:
         if key == pygame.K_DOWN:
             self.down_held = False
 
+    def handle_mouse_down(self, pos):
+        if self.theme_button_rect and self.theme_button_rect.collidepoint(pos):
+            self._toggle_theme()
+
     def draw(self):
         self.screen.fill(BLACK)
-        self.board.draw(self.screen)
+        theme = self._theme_colors()
+        self.board.draw(
+            self.screen,
+            bg_color=theme["board_bg"],
+            grid_color=theme["grid"],
+            color_transform=self._high_contrast_color,
+        )
         self._draw_ghost()
         self._draw_current()
         self._draw_sidebar()
@@ -337,11 +413,13 @@ class Tetris:
     def _draw_current(self):
         for r, c in self.current.cells():
             if r >= 0:
-                self.board._draw_cell(self.screen, r, c, self.current.color)
+                self.board._draw_cell(self.screen, r, c, self._high_contrast_color(self.current.color))
 
     def _draw_ghost(self):
+        theme = self._theme_colors()
         ghost_r = self._ghost_row()
-        ghost_color = tuple(v // 4 for v in self.current.color)
+        block_color = self._high_contrast_color(self.current.color)
+        ghost_color = _blend_color(block_color, theme["board_bg"], 0.65)
         for dr, dc in TETROMINOES[self.current.kind][self.current.rot]:
             r = ghost_r + dr
             c = self.current.col + dc
@@ -351,12 +429,12 @@ class Tetris:
                 size = CELL - 2
                 pygame.draw.rect(self.screen, ghost_color,
                                  (x, y, size, size), border_radius=3)
-                pygame.draw.rect(self.screen, self.current.color,
+                pygame.draw.rect(self.screen, block_color,
                                  (x, y, size, size), 1, border_radius=3)
 
     def _draw_mini_piece(self, kind, ox, oy):
         cells = TETROMINOES[kind][0]
-        color = COLORS[kind]
+        color = self._high_contrast_color(COLORS[kind])
         mini = CELL - 8
         for dr, dc in cells:
             x = ox + dc * mini + 2
@@ -364,17 +442,20 @@ class Tetris:
             pygame.draw.rect(self.screen, color, (x, y, mini - 2, mini - 2), border_radius=2)
 
     def _draw_sidebar(self):
+        theme = self._theme_colors()
         ox = COLS * CELL + 10
         w = SIDEBAR - 20
-        pygame.draw.rect(self.screen, DARK_BG, (COLS * CELL, 0, SIDEBAR, SCREEN_H))
-        pygame.draw.line(self.screen, GRID_COL, (COLS * CELL, 0), (COLS * CELL, SCREEN_H), 2)
+        pygame.draw.rect(self.screen, theme["sidebar_bg"], (COLS * CELL, 0, SIDEBAR, SCREEN_H))
+        pygame.draw.line(self.screen, theme["grid"], (COLS * CELL, 0), (COLS * CELL, SCREEN_H), 2)
 
-        def label(text, y, color=GRAY):
-            surf = self.font_sm.render(text, True, color)
+        def label(text, y, color=None):
+            draw_color = theme["label"] if color is None else color
+            surf = self.font_sm.render(text, True, draw_color)
             self.screen.blit(surf, (ox, y))
 
-        def value(text, y, color=WHITE):
-            surf = self.font_lg.render(text, True, color)
+        def value(text, y, color=None):
+            draw_color = theme["text"] if color is None else color
+            surf = self.font_lg.render(text, True, draw_color)
             self.screen.blit(surf, (ox, y))
 
         label("SCORE", 20)
@@ -384,17 +465,24 @@ class Tetris:
         label("LEVEL", 160)
         value(str(self.level), 180)
 
+        self.theme_button_rect = pygame.Rect(ox, 205, w, 30)
+        pygame.draw.rect(self.screen, theme["button_bg"], self.theme_button_rect, border_radius=4)
+        pygame.draw.rect(self.screen, theme["grid"], self.theme_button_rect, 1, border_radius=4)
+        mode_text = "Dark mode" if self.dark_mode else "Light mode"
+        btn_surf = self.font_sm.render(f"Theme: {mode_text}", True, theme["button_text"])
+        self.screen.blit(btn_surf, btn_surf.get_rect(center=self.theme_button_rect.center))
+
         label("NEXT", 240)
-        pygame.draw.rect(self.screen, GRID_COL, (ox, 265, w, 80), 1)
+        pygame.draw.rect(self.screen, theme["grid"], (ox, 265, w, 80), 1)
         if self.bag:
             self._draw_mini_piece(self.bag[0], ox + 10, 270)
 
         label("HOLD", 365)
-        pygame.draw.rect(self.screen, GRID_COL, (ox, 390, w, 80), 1)
+        pygame.draw.rect(self.screen, theme["grid"], (ox, 390, w, 80), 1)
         if self.held:
             cells = TETROMINOES[self.held][0]
             mini = CELL - 8
-            orig = COLORS[self.held]
+            orig = self._high_contrast_color(COLORS[self.held])
             tinted = tuple(int(v * 0.5) for v in orig) if not self.can_hold else orig
             for dr, dc in cells:
                 x = ox + 10 + dc * mini + 2
@@ -408,24 +496,26 @@ class Tetris:
             ("↓",       "Soft drop"),
             ("Space",      "Hard drop"),
             ("C",          "Hold"),
+            ("T",          "Theme"),
             ("P",          "Pause"),
             ("R",          "Restart"),
         ]
         y = SCREEN_H - len(hints) * 22 - 10
         label("CONTROLS", y - 24)
         for hkey, action in hints:
-            k_surf = self.font_sm.render(hkey, True, (100, 200, 255))
-            a_surf = self.font_sm.render(action, True, GRAY)
+            k_surf = self.font_sm.render(hkey, True, theme["hint"])
+            a_surf = self.font_sm.render(action, True, theme["label"])
             self.screen.blit(k_surf, (ox, y))
             self.screen.blit(a_surf, (ox + 72, y))
             y += 22
 
     def _draw_overlay(self, title, subtitle):
+        theme = self._theme_colors()
         overlay = pygame.Surface((COLS * CELL, ROWS * CELL), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 160))
+        overlay.fill(theme["overlay_bg"])
         self.screen.blit(overlay, (0, 0))
-        t = self.font_lg.render(title, True, WHITE)
-        s = self.font_sm.render(subtitle, True, GRAY)
+        t = self.font_lg.render(title, True, theme["text"])
+        s = self.font_sm.render(subtitle, True, theme["label"])
         cx = COLS * CELL // 2
         self.screen.blit(t, t.get_rect(center=(cx, ROWS * CELL // 2 - 20)))
         self.screen.blit(s, s.get_rect(center=(cx, ROWS * CELL // 2 + 20)))
@@ -441,6 +531,8 @@ class Tetris:
                     self.handle_keydown(event.key)
                 elif event.type == pygame.KEYUP:
                     self.handle_keyup(event.key)
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    self.handle_mouse_down(event.pos)
             self.update(dt)
             self.draw()
 

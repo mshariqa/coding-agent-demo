@@ -9,6 +9,7 @@ from main import (
     Board, Piece, Tetris,
     COLS, ROWS, TETROMINOES, COLORS,
     SCORE_TABLE, LINES_PER_LEVEL, LOCK_DELAY,
+    SCREEN_H, CONTROL_HINTS, CONTROL_LINE_HEIGHT,
     LIGHT_BG, _contrast_ratio
 )
 
@@ -610,6 +611,22 @@ class TestTetrisGameLogic:
             game.dark_mode = False
             adjusted = game._high_contrast_color(COLORS["O"])
             assert _contrast_ratio(adjusted, LIGHT_BG) >= 4.5
+
+    def test_sidebar_controls_fit_below_hold_panel(self):
+        """Test controls section no longer overlaps the hold panel."""
+        with patch('main.pygame'):
+            game = Tetris()
+            layout = game._sidebar_layout()
+
+            hold_bottom = layout["hold_box"][1] + layout["hold_box"][3]
+            assert layout["controls_label_y"] > hold_bottom
+            assert layout["control_line_height"] == CONTROL_LINE_HEIGHT
+
+            controls_bottom = (
+                layout["controls_y"]
+                + len(CONTROL_HINTS) * layout["control_line_height"]
+            )
+            assert controls_bottom <= SCREEN_H
 
 
 # ── Integration Tests ──────────────────────────────────────────────────────────

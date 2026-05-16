@@ -267,7 +267,7 @@ class Tetris:
         return Piece(self.bag.pop(0))
 
     def _fall_speed(self):
-        return max(50, int(1000 * (0.8 - (self.level - 1) * 0.007) ** (self.level - 1)))
+        return 1000 * (0.8 ** (self.level - 1))
 
     def _hold(self):
         if not self.can_hold:

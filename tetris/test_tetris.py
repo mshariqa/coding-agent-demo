@@ -285,11 +285,15 @@ class TestTetrisGameLogic:
         speed5 = mock_tetris._fall_speed()
         assert speed5 < speed1
 
-    def test_fall_speed_minimum(self, mock_tetris):
-        """Test fall speed has minimum."""
-        mock_tetris.level = 100
-        speed = mock_tetris._fall_speed()
-        assert speed >= 50
+    def test_fall_speed_increases_every_level(self, mock_tetris):
+        """Test fall speed increases on every level-up."""
+        speeds = []
+        for level in range(1, 21):
+            mock_tetris.level = level
+            speeds.append(mock_tetris._fall_speed())
+
+        for previous, current in zip(speeds, speeds[1:]):
+            assert current < previous
 
     def test_move_valid(self, mock_tetris):
         """Test successful piece movement."""
